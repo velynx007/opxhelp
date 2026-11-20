@@ -6,8 +6,8 @@ from telegram import (
 )
 from telegram.constants import ParseMode
 from telegram.ext import (
-    Application, MessageHandler, ChatJoinRequestHandler,
-    CommandHandler, ContextTypes, filters,
+    Application, MessageHandler, ChatJoinRequestHandler, CommandHandler,
+    CallbackQueryHandler, ContextTypes, filters,
 )
 
 TOKEN = os.environ["BOT_TOKEN"]
@@ -24,7 +24,6 @@ def sc(text):
 
 
 def msg_text(title, body):
-    # bold + small caps, quote me body, beech me gap nahi
     return f"<b>{sc(title)}</b>\n<blockquote><b>{sc(body)}</b></blockquote>"
 
 
@@ -38,12 +37,24 @@ def welcome_markup(username):
     return InlineKeyboardMarkup([
         [btn("add me to your group", "success",
              url=f"https://t.me/{username}?startgroup=true")],
-        [btn("help", "primary", callback_data="help")],
+        [btn("how it works", "primary", callback_data="help")],
     ])
 
 
-WELCOME = msg_text("welcome", "rules follow karo aur links mat bhejo.")
-HELP = msg_text("help", "main join/left, vc, ownership msgs saaf karta hoon aur links hataata hoon.")
+WELCOME = msg_text(
+    "welcome",
+    "i keep your group clean and distraction free.\n"
+    "add me as an admin and i will take care of the rest.",
+)
+HELP = msg_text(
+    "how it works",
+    "• removes join and left messages\n"
+    "• removes voice chat start and end alerts\n"
+    "• removes ownership transfer notices\n"
+    "• approves join requests automatically\n"
+    "• deletes links from members\n"
+    "• make me admin with delete messages and invite users rights",
+)
 
 
 async def welcome_dm(bot, chat_id):
@@ -104,28 +115,30 @@ async def help_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.message.reply_text(HELP, parse_mode=ParseMode.HTML)
 
 
-async def process(data):
-    from telegram.ext import CallbackQueryHandler
-    application = Application.builder().token(TOKEN).updater(None).build()
-    application.add_handler(CommandHandler("start", start, filters.ChatType.PRIVATE))
-    application.add_handler(CallbackQueryHandler(help_cb, pattern="^help$"))
-    application.add_handler(ChatJoinRequestHandler(join_request))
-    application.add_handler(MessageHandler(
-        filters.ChatType.GROUPS & filters.StatusUpdate.ALL, clean_service))
-    link_f = (
-        filters.Entity(MessageEntity.URL) | filters.Entity(MessageEntity.TEXT_LINK)
-        | filters.CaptionEntity(MessageEntity.URL)
-        | filters.CaptionEntity(MessageEntity.TEXT_LINK)
-    )
-    application.add_handler(MessageHandler(
-        filters.ChatType.GROUPS & link_f & ~filters.StatusUpdate.ALL, link_remover))
-    async with application:
-        await application.process_update(Update.de_json(data, application.bot))
+# ---------- build once, reuse on every request ----------
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+application = Application.builder().token(TOKEN).updater(None).build()
+application.add_handler(CommandHandler("start", start, filters.ChatType.PRIVATE))
+application.add_handler(CallbackQueryHandler(help_cb, pattern="^help$"))
+application.add_handler(ChatJoinRequestHandler(join_request))
+application.add_handler(MessageHandler(
+    filters.ChatType.GROUPS & filters.StatusUpdate.ALL, clean_service))
+_link = (
+    filters.Entity(MessageEntity.URL) | filters.Entity(MessageEntity.TEXT_LINK)
+    | filters.CaptionEntity(MessageEntity.URL)
+    | filters.CaptionEntity(MessageEntity.TEXT_LINK)
+)
+application.add_handler(MessageHandler(
+    filters.ChatType.GROUPS & _link & ~filters.StatusUpdate.ALL, link_remover))
+loop.run_until_complete(application.initialize())
 
 
 @app.route("/", defaults={"path": ""}, methods=["GET", "POST"])
 @app.route("/<path:path>", methods=["GET", "POST"])
 def webhook(path):
     if request.method == "POST":
-        asyncio.run(process(request.get_json(force=True)))
+        update = Update.de_json(request.get_json(force=True), application.bot)
+        loop.run_until_complete(application.process_update(update))
     return "ok"
