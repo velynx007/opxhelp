@@ -503,6 +503,79 @@ async def admin_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await edit(q, confirm_text(st, n), confirm_markup(st))
 
 
+# ---------- purge ----------
+class _QuizBot(filters.MessageFilter):
+    def filter(self, message):
+        v, f = message.via_bot, message.from_user
+        return bool(
+            (v and (v.username or "").lower() == "quizbot")
+            or (f and f.is_bot and (f.username or "").lower() == "quizbot")
+        )
+
+
+_keep_ix = []
+
+
+async def keep_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    m = update.effective_message
+    if not _keep_ix:
+        _keep_ix.append(1)
+        try:
+            await db(D.keep.create_index, "ts", expireAfterSeconds=172800)
+        except Exception:
+            pass
+    await db(D.keep.update_one, {"c": m.chat_id, "m": m.message_id},
+             {"$set": {"ts": int(time.time())}}, upsert=True)
+
+
+async def _del(bot, chat_id, ids):
+    for _ in range(2):
+        try:
+            await bot.delete_messages(chat_id, ids)
+            return
+        except RetryAfter as e:
+            await asyncio.sleep(min(e.retry_after, 10) + 1)
+        except TelegramError:
+            return
+
+
+async def purge_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg, u, bot = update.effective_message, update.effective_user, context.bot
+    if not u or msg.sender_chat:
+        return
+    ok = await is_sudo(u.id)
+    if not ok:
+        mem = await bot.get_chat_member(msg.chat_id, u.id)
+        ok = mem.status == "creator" or (
+            mem.status == "administrator" and mem.can_delete_messages)
+    if not ok:
+        return
+    kw = {"message_thread_id": msg.message_thread_id} if msg.is_topic_message else {}
+    r = msg.reply_to_message
+    if not r:
+        m = await bot.send_message(
+            msg.chat_id,
+            msg_text("purge", "reply to the message you want to delete from."),
+            parse_mode=HTML, **kw)
+        await asyncio.sleep(4)
+        await _del(bot, msg.chat_id, [m.message_id, msg.message_id])
+        return
+    end = msg.message_id
+    start = max(r.message_id, end - 3000)
+    kept = await db(lambda: {d["m"] for d in D.keep.find(
+        {"c": msg.chat_id, "m": {"$gte": start, "$lte": end}}, {"m": 1})})
+    ids = [i for i in range(start, end + 1) if i not in kept]
+    chunks = [ids[i:i + 100] for i in range(0, len(ids), 100)]
+    for i in range(0, len(chunks), 5):
+        await asyncio.gather(*(_del(bot, msg.chat_id, c) for c in chunks[i:i + 5]))
+    done = await bot.send_message(
+        msg.chat_id,
+        msg_text("purge complete", f"cleaned up to {len(ids)} messages. quiz bot messages were kept."),
+        parse_mode=HTML, **kw)
+    await asyncio.sleep(4)
+    await _del(bot, msg.chat_id, [done.message_id])
+
+
 # ---------- build once, reuse on every request ----------
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -531,6 +604,8 @@ _link = (
 )
 application.add_handler(MessageHandler(
     filters.ChatType.GROUPS & _link & ~filters.StatusUpdate.ALL & ~OWNER_SVC, link_remover))
+application.add_handler(CommandHandler("purge", purge_cmd, filters.ChatType.GROUPS))
+application.add_handler(MessageHandler(filters.ChatType.GROUPS & _QuizBot(), keep_quiz), group=2)
 loop.run_until_complete(application.initialize())
 
 
