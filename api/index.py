@@ -84,7 +84,7 @@ async def is_sudo(uid):
 WELCOME = msg_text(
     "welcome",
     "i keep your group clean and distraction free.\n"
-    "add me as an admin and i will take care of the rest.",
+    "add me as an admin, then send /help to see every command.",
 )
 HELP = msg_text(
     "how it works",
@@ -101,7 +101,7 @@ def welcome_markup(username):
     return InlineKeyboardMarkup([
         [btn("add me to your group", "success",
              url=f"https://t.me/{username}?startgroup=true")],
-        [btn("how it works", "primary", callback_data="help")],
+        [btn("all commands", "primary", callback_data="help")],
         [btn("updates", "primary", url=UPDATES_URL),
          btn("developer", "success", url=DEV_URL)],
     ])

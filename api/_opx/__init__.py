@@ -2,7 +2,7 @@ from telegram.ext import filters
 from telegram.ext import (
     CommandHandler, MessageHandler, CallbackQueryHandler, ChatJoinRequestHandler,
 )
-from . import core, mod, misc, guard
+from . import core, mod, misc, guard, helpmod
 
 
 def register(application, db, welcome_dm):
@@ -19,6 +19,9 @@ def register(application, db, welcome_dm):
             application.add_handler(CommandHandler(name, fn, grp))
     for name, fn in misc.OWNER_COMMANDS.items():
         application.add_handler(CommandHandler(name, fn, anywhere))
+    application.add_handler(CommandHandler("help", helpmod.cmd_help, anywhere))
+    application.add_handler(CallbackQueryHandler(helpmod.entry, pattern="^help$"), group=-2)
+    application.add_handler(CallbackQueryHandler(helpmod.cb, pattern="^h:"))
     application.add_handler(CallbackQueryHandler(mod.mod_cb, pattern="^m:"))
     application.add_handler(CallbackQueryHandler(guard.settings_cb, pattern="^s:"))
     application.add_handler(CallbackQueryHandler(guard.captcha_cb, pattern="^cap:"))
