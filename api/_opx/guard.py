@@ -2,7 +2,8 @@ import re
 import time
 import asyncio
 from collections import defaultdict
-from telegram import InlineKeyboardMarkup, ChatPermissions, MessageEntity, filters
+from telegram import InlineKeyboardMarkup, ChatPermissions, MessageEntity
+from telegram.ext import filters
 from telegram.error import TelegramError
 from telegram.ext import ApplicationHandlerStop
 from . import core as C

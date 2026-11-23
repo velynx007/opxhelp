@@ -1,7 +1,7 @@
 import re
 import time
 import asyncio
-from telegram import filters
+from telegram.ext import filters
 from telegram.error import TelegramError
 from . import core as C
 from .core import *

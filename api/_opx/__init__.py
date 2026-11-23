@@ -1,4 +1,4 @@
-from telegram import filters
+from telegram.ext import filters
 from telegram.ext import (
     CommandHandler, MessageHandler, CallbackQueryHandler, ChatJoinRequestHandler,
 )
