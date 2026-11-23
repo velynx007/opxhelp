@@ -205,6 +205,7 @@ async def join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def link_remover(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return  # handled by _opx
     msg = update.effective_message
     if not msg or msg.sender_chat or not msg.from_user:
         return
@@ -606,6 +607,10 @@ application.add_handler(MessageHandler(
     filters.ChatType.GROUPS & _link & ~filters.StatusUpdate.ALL & ~OWNER_SVC, link_remover))
 application.add_handler(CommandHandler("purge", purge_cmd, filters.ChatType.GROUPS))
 application.add_handler(MessageHandler(filters.ChatType.GROUPS & _QuizBot(), keep_quiz), group=2)
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _opx import register
+register(application, D, welcome_dm)
 loop.run_until_complete(application.initialize())
 
 
